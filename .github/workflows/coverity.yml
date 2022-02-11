@@ -1,0 +1,55 @@
+name: coverity
+on: [push, pull_request]
+
+jobs:
+  analyze:
+    name: Analyze
+    if: github.repository == 'bjosv/f-stack'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Prepare
+      run: |
+        sudo apt update -qq
+        sudo apt install -qq meson libnuma-dev
+    - uses: actions/checkout@v2
+    - name: Download Coverity
+      run: |
+        cd ..
+        wget -q https://scan.coverity.com/download/linux64 --post-data "token=${COVERITY_TOKEN}&project=bjosv/f-stack" -O coverity_tool.tgz
+        mkdir coverity
+        tar xzf coverity_tool.tgz --strip 1 -C coverity
+        echo "$(pwd)/coverity/bin" >> $GITHUB_PATH
+      env:
+        # COVERITY_TOKEN: ${{ secrets.COVERITY_TOKEN }}
+        # Temporary define of token
+        COVERITY_TOKEN: UAuh95bQgmJASlIBZE661g
+    - name: Build dpdk
+      working-directory: dpdk
+      run: |
+        meson -Denable_kmods=true build
+        ninja -C build
+        sudo ninja -C build install
+    - name: Build f-stack with Coverity
+      run: |
+        cov-build --dir cov-int make -C lib
+        sudo FF_PATH=$(pwd) PKG_CONFIG_PATH=/usr/local/lib/x86_64-linux-gnu/pkgconfig \
+           make -C lib install
+    - name: Build tools with Coverity
+      run: |
+        cov-build --dir cov-int make -C tools
+    - name: Build example with Coverity
+      run: |
+        cov-build --dir cov-int make -C example
+    - name: Submit the result to Coverity
+      run: |
+        tar czvf f-stack.tgz cov-int
+        curl \
+          --form token=${COVERITY_TOKEN} \
+          --form email=bjorn.a.svensson@est.tech \
+          --form file=@f-stack.tgz \
+          --form version=${GITHUB_SHA} \
+          https://scan.coverity.com/builds?project=bjosv/f-stack
+      env:
+        # COVERITY_TOKEN: ${{ secrets.COVERITY_TOKEN }}
+        # Temporary define of token
+        COVERITY_TOKEN: UAuh95bQgmJASlIBZE661g

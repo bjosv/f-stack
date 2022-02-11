@@ -1,0 +1,31 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Prepare
+      run: |
+        sudo apt update -qq
+        sudo apt install -qq meson libnuma-dev
+    - uses: actions/checkout@v2
+    - name: Build dpdk
+      working-directory: dpdk
+      run: |
+        meson -Denable_kmods=true build
+        ninja -C build
+        sudo ninja -C build install
+    - name: Build f-stack
+      run: |
+        make -C lib
+        sudo FF_PATH=$(pwd) PKG_CONFIG_PATH=/usr/local/lib/x86_64-linux-gnu/pkgconfig \
+           make -C lib install
+    - name: Build tools
+      run: |
+        make -C tools
+    - name: Build example
+      run: |
+        make -C example
